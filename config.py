@@ -32,7 +32,7 @@ PROBE_TOP_PLAYED_LIMIT = int(os.environ.get("PROBE_TOP_PLAYED_LIMIT", "1"))
 # beyond a couple hundred entries. The full count is still surfaced as a
 # warning so the user knows the list is truncated.
 MIGRATION_UNMATCHED_ALBUMS_PAYLOAD_LIMIT = int(os.environ.get("MIGRATION_UNMATCHED_ALBUMS_PAYLOAD_LIMIT", "200"))
-TEMP_DIR = "/app/temp_audio"  # Always use /app/temp_audio
+TEMP_DIR = os.environ.get("TEMP_DIR", "/app/temp_audio")
 
 
 def _compute_headers():
