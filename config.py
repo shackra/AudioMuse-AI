@@ -293,7 +293,7 @@ DATABASE_URL = os.environ.get(
 
 # --- AI User for Chat SQL Execution ---
 AI_CHAT_DB_USER_NAME = os.environ.get("AI_CHAT_DB_USER_NAME", "ai_user")
-AI_CHAT_DB_USER_PASSWORD = os.environ.get("AI_CHAT_DB_USER_PASSWORD", "ChangeThisSecurePassword123!") # IMPORTANT: Change this default and use environment variables
+AI_CHAT_DB_USER_PASSWORD = os.environ.get("AI_CHAT_DB_USER_PASSWORD", "") # Set via environment variable or NixOS module; empty = no password
 
 # --- Classifier Constant ---
 MOOD_LABELS = [

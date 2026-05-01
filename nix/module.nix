@@ -34,6 +34,9 @@ let
   // lib.optionalAttrs cfg.gpu.enable {
     USE_GPU_CLUSTERING = "true";
   }
+  // {
+    AI_CHAT_DB_USER_NAME = cfg.postgresql.aiChatUser.name;
+  }
   // cfg.extraEnvironment;
 
   # Common systemd service configuration
@@ -110,6 +113,17 @@ in
         type = types.bool;
         default = true;
         description = "Whether to create the PostgreSQL database and user locally.";
+      };
+
+      aiChatUser = {
+        name = mkOption {
+          type = types.str;
+          default = "ai_user";
+          description = ''
+            Read-only PostgreSQL role used by AI chat queries.
+            Set AI_CHAT_DB_USER_PASSWORD in environmentFile to configure its password.
+          '';
+        };
       };
     };
 
@@ -305,11 +319,36 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           User = "postgres";
-          ExecStart = let
-            psql = config.services.postgresql.package + "/bin/psql";
-          in
-            "${psql} -c \"ALTER DATABASE \\\"${cfg.postgresql.database}\\\" OWNER TO \\\"${cfg.postgresql.user}\\\"\"";
+        } // lib.optionalAttrs (cfg.environmentFile != null) {
+          EnvironmentFile = cfg.environmentFile;
         };
+        script = let
+          psql = config.services.postgresql.package + "/bin/psql";
+          db = cfg.postgresql.database;
+          mainUser = cfg.postgresql.user;
+          aiUser = cfg.postgresql.aiChatUser.name;
+        in ''
+          ${psql} -c "ALTER DATABASE \"${db}\" OWNER TO \"${mainUser}\""
+
+          # Create read-only role for AI chat queries
+          # Password comes from AI_CHAT_DB_USER_PASSWORD in environmentFile
+          if ! ${psql} -tAc "SELECT 1 FROM pg_roles WHERE rolname = '${aiUser}'" | grep -q 1; then
+            if [ -n "''${AI_CHAT_DB_USER_PASSWORD:-}" ]; then
+              ${psql} -c "CREATE ROLE \"${aiUser}\" WITH LOGIN PASSWORD '$AI_CHAT_DB_USER_PASSWORD'"
+            else
+              ${psql} -c "CREATE ROLE \"${aiUser}\" WITH LOGIN"
+            fi
+          else
+            if [ -n "''${AI_CHAT_DB_USER_PASSWORD:-}" ]; then
+              ${psql} -c "ALTER ROLE \"${aiUser}\" WITH PASSWORD '$AI_CHAT_DB_USER_PASSWORD'"
+            fi
+          fi
+
+          ${psql} -d "${db}" -c "GRANT CONNECT ON DATABASE \"${db}\" TO \"${aiUser}\""
+          ${psql} -d "${db}" -c "GRANT USAGE ON SCHEMA public TO \"${aiUser}\""
+          ${psql} -d "${db}" -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${aiUser}\""
+          ${psql} -d "${db}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"${mainUser}\" IN SCHEMA public GRANT SELECT ON TABLES TO \"${aiUser}\""
+        '';
       };
 
       # --- Flask web server ---
